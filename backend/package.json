@@ -1,0 +1,13 @@
+{
+    "name": "english6-backend",
+    "version": "1.0.0",
+    "description": "英语六级词汇练习后端",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "cors": "^2.8.5"
+    }
+}

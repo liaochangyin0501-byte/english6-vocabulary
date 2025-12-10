@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英语六级词汇练习</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        header { background: #4a5568; color: white; padding: 30px; text-align: center; }
+        header h1 { font-size: 2.2rem; margin-bottom: 10px; }
+        .quiz-area { padding: 30px; }
+        .word-card { background: #f7fafc; padding: 30px; border-radius: 15px; margin-bottom: 30px; text-align: center; }
+        #english-word { font-size: 3.5rem; color: #2d3748; font-weight: bold; margin: 20px 0; }
+        .phonetic { color: #718096; font-size: 1.5rem; margin-bottom: 30px; }
+        .options { display: grid; gap: 15px; margin: 30px 0; }
+        .option { padding: 20px; border: 2px solid #e2e8f0; border-radius: 10px; cursor: pointer; transition: all 0.3s; font-size: 1.1rem; }
+        .option:hover { border-color: #667eea; background: #f0f4ff; }
+        .controls { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        button { padding: 15px 35px; border: none; border-radius: 10px; font-size: 1.1rem; cursor: pointer; font-weight: bold; }
+        #next-btn { background: #48bb78; color: white; }
+        #hint-btn { background: #ed8936; color: white; }
+        #submit-btn { background: #667eea; color: white; }
+        .hidden { display: none; }
+        .feedback { padding: 20px; margin-top: 20px; border-radius: 10px; }
+        .correct { background: #c6f6d5; color: #22543d; }
+        .wrong { background: #fed7d7; color: #742a2a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 英语六级核心词汇练习</h1>
+            <p>已掌握 <span id="score">0</span> 个单词 | 正确率: <span id="accuracy">0%</span></p>
+        </header>
+        
+        <main class="quiz-area">
+            <div class="word-card">
+                <h2 id="english-word">Loading...</h2>
+                <div class="phonetic" id="phonetic">/ləʊdɪŋ/</div>
+                <p>请选择该单词的正确中文释义：</p>
+                
+                <div class="options" id="options-container">
+                    <!-- 选项将通过JS动态生成 -->
+                </div>
+                
+                <div class="controls">
+                    <button id="hint-btn">💡 提示</button>
+                    <button id="submit-btn" class="hidden">✅ 提交答案</button>
+                    <button id="next-btn">⏭️ 下一题</button>
+                </div>
+                
+                <div id="feedback" class="feedback hidden"></div>
+            </div>
+            
+            <div style="text-align: center; color: #718096; margin-top: 40px;">
+                <p>当前模式：选择题 | 单词总数: <span id="total-words">5</span> | 服务器状态: <span id="server-status">🔴 检测中...</span></p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ========== 配置 ==========
+        const API_BASE_URL = 'http://localhost:3000/api';
+        let currentWordIndex = 0;
+        let allWords = [];
+        let score = 0;
+        let totalAnswered = 0;
+        let selectedOption = null;
+
+        // ========== DOM元素 ==========
+        const elements = {
+            englishWord: document.getElementById('english-word'),
+            phonetic: document.getElementById('phonetic'),
+            optionsContainer: document.getElementById('options-container'),
+            submitBtn: document.getElementById('submit-btn'),
+            nextBtn: document.getElementById('next-btn'),
+            hintBtn: document.getElementById('hint-btn'),
+            feedback: document.getElementById('feedback'),
+            score: document.getElementById('score'),
+            accuracy: document.getElementById('accuracy'),
+            totalWords: document.getElementById('total-words'),
+            serverStatus: document.getElementById('server-status')
+        };
+
+        // ========== 初始化 ==========
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 页面加载完成，开始初始化...');
+            
+            // 测试服务器连接
+            try {
+                const testRes = await fetch(`${API_BASE_URL}/hello`);
+                if (testRes.ok) {
+                    elements.serverStatus.innerHTML = '🟢 已连接';
+                    elements.serverStatus.style.color = '#38a169';
+                }
+            } catch (error) {
+                elements.serverStatus.innerHTML = '🔴 连接失败';
+                elements.serverStatus.style.color = '#e53e3e';
+                alert('后端服务器未启动！请确保已运行 node server.js');
+                return;
+            }
+            
+            // 加载词汇数据
+            await loadWords();
+            // 显示第一题
+            loadQuestion();
+        });
+
+        // ========== 核心函数 ==========
+        async function loadWords() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/words`);
+                const data = await response.json();
+                if (data.success) {
+                    allWords = data.data;
+                    elements.totalWords.textContent = allWords.length;
+                    console.log(`✅ 加载了 ${allWords.length} 个单词`);
+                }
+            } catch (error) {
+                console.error('加载词汇失败:', error);
+                // 使用备用数据
+                allWords = [
+                    { id: 1, word: "abandon", phonetic: "/əˈbændən/", meaning: "放弃，遗弃" },
+                    { id: 2, word: "accommodate", phonetic: "/əˈkɒmədeɪt/", meaning: "容纳，提供住宿" }
+                ];
+                elements.totalWords.textContent = allWords.length;
+            }
+        }
+
+        function loadQuestion() {
+            if (allWords.length === 0) {
+                elements.englishWord.textContent = "暂无数据";
+                return;
+            }
+            
+            const word = allWords[currentWordIndex];
+            elements.englishWord.textContent = word.word;
+            elements.phonetic.textContent = word.phonetic;
+            
+            // 生成选项
+            generateOptions(word);
+            
+            // 重置状态
+            selectedOption = null;
+            elements.submitBtn.classList.add('hidden');
+            elements.nextBtn.textContent = '⏭️ 下一题';
+            elements.feedback.classList.add('hidden');
+            
+            updateStats();
+        }
+
+        function generateOptions(correctWord) {
+            elements.optionsContainer.innerHTML = '';
+            
+            // 收集所有错误选项
+            const wrongOptions = allWords
+                .filter(w => w.id !== correctWord.id)
+                .map(w => w.meaning)
+                .slice(0, 3); // 取3个
+            
+            // 创建选项数组 (1正确 + 3错误)
+            const options = [
+                { text: correctWord.meaning, isCorrect: true },
+                ...wrongOptions.map(text => ({ text, isCorrect: false }))
+            ];
+            
+            // 打乱选项顺序
+            shuffleArray(options);
+            
+            // 创建选项元素
+            options.forEach((option, index) => {
+                const optionEl = document.createElement('div');
+                optionEl.className = 'option';
+                optionEl.innerHTML = `
+                    <span style="font-weight: bold; margin-right: 10px;">${String.fromCharCode(65 + index)}.</span>
+                    <span>${option.text}</span>
+                `;
+                
+                optionEl.addEventListener('click', () => {
+                    // 移除之前的选择
+                    document.querySelectorAll('.option').forEach(el => {
+                        el.style.borderColor = '#e2e8f0';
+                        el.style.background = 'white';
+                    });
+                    
+                    // 标记当前选择
+                    optionEl.style.borderColor = '#667eea';
+                    optionEl.style.background = '#ebf8ff';
+                    selectedOption = option;
+                    
+                    // 显示提交按钮
+                    elements.submitBtn.classList.remove('hidden');
+                });
+                
+                elements.optionsContainer.appendChild(optionEl);
+            });
+        }
+
+        async function submitAnswer() {
+            if (!selectedOption) {
+                alert('请先选择一个答案！');
+                return;
+            }
+            
+            const currentWord = allWords[currentWordIndex];
+            const isCorrect = selectedOption.isCorrect;
+            
+            // 显示反馈
+            elements.feedback.classList.remove('hidden');
+            elements.feedback.className = `feedback ${isCorrect ? 'correct' : 'wrong'}`;
+            elements.feedback.innerHTML = isCorrect 
+                ? `✅ <strong>回答正确！</strong> ${currentWord.word} 的意思是 "${currentWord.meaning}"`
+                : `❌ <strong>回答错误。</strong> 正确答案是: "${currentWord.meaning}"`;
+            
+            // 更新分数
+            if (isCorrect) score++;
+            totalAnswered++;
+            
+            // 禁用选项点击
+            document.querySelectorAll('.option').forEach(el => {
+                el.style.pointerEvents = 'none';
+            });
+            
+            // 更新按钮
+            elements.submitBtn.classList.add('hidden');
+            elements.nextBtn.textContent = '⏭️ 继续';
+            
+            updateStats();
+        }
+
+        function nextQuestion() {
+            currentWordIndex = (currentWordIndex + 1) % allWords.length;
+            loadQuestion();
+        }
+
+        function showHint() {
+            const word = allWords[currentWordIndex];
+            alert(`💡 提示：\n单词: ${word.word}\n字母数: ${word.word.length}\n开头字母: ${word.word[0].toUpperCase()}`);
+        }
+
+        function updateStats() {
+            elements.score.textContent = score;
+            const accuracy = totalAnswered > 0 ? Math.round((score / totalAnswered) * 100) : 0;
+            elements.accuracy.textContent = `${accuracy}%`;
+        }
+
+        // ========== 工具函数 ==========
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // ========== 事件监听 ==========
+        elements.submitBtn.addEventListener('click', submitAnswer);
+        elements.nextBtn.addEventListener('click', nextQuestion);
+        elements.hintBtn.addEventListener('click', showHint);
+    </script>
+</body>
+</html>
